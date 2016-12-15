@@ -39,4 +39,8 @@ module.exports =
     )
     digest.digestString(string)
 
+unless Array.prototype.last
+  Array.prototype.last = ->
+    this[this.length - 1]
+
 return

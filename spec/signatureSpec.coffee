@@ -31,28 +31,33 @@ describe 'Signature', ->
     describe 'without cer', ->
       it 'should throw error', ->
         expect ->
-          new Signature(null, sig, new Date())
+          new Signature(signature: sig, signedAt: new Date())
         .to.throwException (e) ->
           expect(e).to.be.a(errors.ArgumentError)
 
     describe 'without signedAt', ->
       it 'should throw error', ->
         expect ->
-          new Signature(cer, sig)
+          new Signature(cer: cer, signature: sig)
         .to.throwException (e) ->
           expect(e).to.be.a(errors.ArgumentError)
 
   describe 'without email', ->
     describe '.email', ->
       it 'should be the email of the certificate', ->
-        signature = new Signature(cer, sig, new Date())
+        signature = new Signature(cer: cer, signature: sig, signedAt: new Date())
         expect(signature.email).to.be('pruebas@sat.gob.mx')
 
   describe 'with everything OK', ->
     signature = null
     date = new Date()
     beforeEach ->
-      signature = new Signature(cer, sig, date, 'other@email.com')
+      signature = new Signature(
+        cer: cer,
+        signature: sig,
+        signedAt: date,
+        email: 'other@email.com'
+      )
 
     describe '.sig', ->
       describe 'without params', ->
@@ -108,3 +113,10 @@ describe 'Signature', ->
           expect ->
             signature.valid()
           .to.throwException errors.ArgumentError
+
+    describe '.validAssetSig', ->
+      describe 'when hash is not passed', ->
+        it 'should fail', ->
+          expect ->
+            signature.validAssetSig()
+          .to.throwException(errors.ArgumentError)

@@ -57,14 +57,16 @@ describe 'Document', ->
           done()
 
     describe 'with duplicated signers', ->
-      it 'should raise error', ->
+      # a document can have duplicate signers
+      # if, for example, when the signer acts
+      # as the legal rep and as himself.
+      it 'should not raise error', ->
         expect ->
           new Document(
             'cGRmLWJhc2U2NC1jb250ZW50',
             signers: [signers[0], signers[0]]
           )
-        .to.throwException (e) ->
-          expect(e).to.be.a(errors.DuplicateSignersError)
+        .not.to.throwException
 
   describe 'methods', ->
     doc = null

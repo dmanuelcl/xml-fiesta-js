@@ -11,28 +11,39 @@ ExclusiveCanonicalization = xmlCrypto.
 common = require './common'
 
 class XML
-  parse: (xml) ->
-    el = this
+  @parse: (xml) ->
     new Promise (resolve, reject) ->
       xml2js.parseString xml, (err, result) ->
         return reject(err) if err
-        el.eDocument = result.electronicDocument
-        eDocumentAttrs = el.eDocument.$
-        el.version = eDocumentAttrs.version
-        el.signed = eDocumentAttrs.signed
-        v = el.version.split(/\./).map (v) -> parseInt(v)
-        el.version_int = v[0] * 100 + v[1] * 10 + v[2]
+        xml = XML.parseJs(result)
+        resolve(xml)
 
-        if el.version_int < 100
-          el.fileElementName = 'pdf'
-        else
-          el.fileElementName = 'file'
+  # Parse a xml2js Javascript Object
+  # @param xmlObject [Hash] xml2js Javascript Object
+  # @param transfer [Boolean] is this document a transfer?
+  @parseJs: (xmlObject, transfer) ->
+    xml = new XML
+    if transfer
+      xml.eDocument = xmlObject
+    else
+      xml.eDocument = xmlObject.electronicDocument || xmlObject.transferableDocument
+    eDocumentAttrs = xml.eDocument.$
+    xml.version = eDocumentAttrs.version
+    xml.signed = eDocumentAttrs.signed
+    xml.assetId = eDocumentAttrs.assetId
+    v = xml.version.split(/\./).map (v) -> parseInt(v)
+    xml.version_int = v[0] * 100 + v[1] * 10 + v[2]
 
-        pdfAttrs = el.eDocument[el.fileElementName][0].$
-        el.name = pdfAttrs.name
-        el.contentType = pdfAttrs.contentType
-        el.originalHash = pdfAttrs.originalHash
-        resolve(el)
+    if xml.version_int < 100
+      xml.fileElementName = 'pdf'
+    else
+      xml.fileElementName = 'file'
+
+    pdfAttrs = xml.eDocument[xml.fileElementName][0].$
+    xml.name = pdfAttrs.name
+    xml.contentType = pdfAttrs.contentType
+    xml.originalHash = pdfAttrs.originalHash
+    xml
 
   canonical: ->
     edoc = JSON.parse(JSON.stringify(@eDocument))
@@ -41,6 +52,7 @@ class XML
     if @version_int >= 100
       edoc[@fileElementName][0]._ = ''
 
+    # TODO: set 'transferableDocument' when its a transferable
     builder = new xml2js.Builder(
       rootName: 'electronicDocument'
       renderOpts:
@@ -66,10 +78,19 @@ class XML
       parsedSigners.push({
         email: attrs.email
         cer: common.b64toHex(signer.certificate[0]._)
-        signature: common.b64toHex(signer.signature[0]._)
-        signedAt: signer.signature[0].$.signedAt
+        signature: signer.signature && common.b64toHex(signer.signature[0]._)
+        assetSignature: signer.assetSignature && common.b64toHex(signer.assetSignature[0]._)
+        signedAt: signer.signature && signer.signature[0].$.signedAt
+        address: attrs.address
       })
     parsedSigners
+
+  xmlTransfers: ->
+    return [] unless @eDocument.transfers
+    parsedTransfers = []
+    @eDocument.transfers[0].transfer.forEach (transfer) ->
+      parsedTransfers.push(XML.parseJs(transfer, true))
+    parsedTransfers
 
   getConservancyRecord: ->
     return null unless @eDocument.conservancyRecord

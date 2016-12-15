@@ -9,8 +9,9 @@ describe 'XML', ->
     beforeEach (done) ->
       xmlExample = "#{__dirname}/fixtures/example_signed_cr.xml"
       xmlString = fs.readFileSync(xmlExample)
-      this.xml = new XML()
-      this.xml.parse(xmlString).then ->
+      el = this
+      XML.parse(xmlString).then (xml) ->
+        el.xml = xml
         done()
 
     describe 'original xml hash', (done) ->
@@ -25,8 +26,9 @@ describe 'XML', ->
     beforeEach (done) ->
       xmlExample = "#{__dirname}/fixtures/example_signed_cr-v1.0.0.xml"
       xmlString = fs.readFileSync(xmlExample)
-      this.xml = new XML()
-      this.xml.parse(xmlString).then ->
+      el = this
+      XML.parse(xmlString).then (xml) ->
+        el.xml = xml
         done()
 
     describe 'original xml hash', (done) ->

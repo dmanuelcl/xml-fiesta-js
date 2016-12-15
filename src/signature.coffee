@@ -3,7 +3,13 @@ errors = require './errors'
 common = require './common'
 
 class Signature
-  constructor: (cer, @signature, @signedAt, @email) ->
+  constructor: (args) ->
+    cer = args.cer
+    @signature = args.signature
+    @assetSignature = args.assetSignature
+    @signedAt = args.signedAt
+    @email = args.email
+    @address = args.address
     throw new errors.ArgumentError(
       'Signature must have signedAt'
     ) unless @signedAt
@@ -21,6 +27,7 @@ class Signature
     }
 
   sig: (format) ->
+    return false unless @signature
     return @signature if format is 'hex' or !format
     return common.hextoB64(@signature) if format is 'base64'
     throw new errors.ArgumentError "unknown format #{format}"
@@ -28,5 +35,9 @@ class Signature
   valid: (hash) ->
     throw new errors.ArgumentError 'hash is required' unless hash
     @certificate.verifyString(hash, @signature)
+
+  validAssetSig: (hash) ->
+    throw new errors.ArgumentError 'hash is required' unless hash
+    @certificate.verifyString(hash, @assetSignature)
 
 module.exports = Signature

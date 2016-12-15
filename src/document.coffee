@@ -14,12 +14,17 @@ class Document
     throw new Error('file is required') unless file
     @pdf_content = file
     @signers = []
+    @transfers = []
+    @lastOStringHash = null
     defaultOpts =
       version: VERSION
       signers: []
+      transfers: []
+      assetId: null
 
     @errors = {}
     options = common.extend(defaultOpts, options)
+    @assetId = options.assetId
     @conservancyRecord = null
     @recordPresent = false
     if options.conservancyRecord
@@ -44,10 +49,14 @@ class Document
     })
     @originalHash = digest.digestHex(@file('hex'))
 
+    doc = this
     if options.signers.length > 0
-      doc = this
       options.signers.forEach (el) ->
-        doc.add_signer(el)
+        doc.addSigner(el)
+
+    if options.transfers.length > 0
+      options.transfers.forEach (el) ->
+        doc.addTransfer(el)
 
   fileBuffer: ->
     return null unless @pdf_content
@@ -66,24 +75,28 @@ class Document
   # @deprecated
   pdf: (format) -> @file(format)
 
-  add_signer: (signer) ->
-    if !signer.cer || !signer.signature || !signer.signedAt
+  addSigner: (signer) ->
+    if !signer.cer || !signer.signedAt
       throw new errors.InvalidSignerError(
-        'signer must contain cer, signature and signedAt'
-      )
-    if @signer_exist(signer)
-      throw new errors.DuplicateSignersError(
-        'signer already exists'
+        'signer must contain cer and signedAt'
       )
     @signers.push(signer)
 
+  addTransfer: (transfer) ->
+    unless transfer instanceof Document
+      throw new Error('Transfer must be a Document')
+    transfer.parent = this
+    if @transfers.length == 0
+      transfer.lastOStringHash = this.originalStringHash()
+    else
+      transfer.lastOStringHash = @transfers.last().originalStringHash()
+    @transfers.push(transfer)
+
+  # TODO: set it in addSigner and put it
+  #       in a property instead of a function
   signatures: ->
     @signers.map (signer) ->
-      new Signature(
-        signer.cer,
-        signer.signature,
-        signer.signedAt
-      )
+      new Signature(signer)
 
   validSignatures: ->
     return false unless @originalHash
@@ -91,6 +104,40 @@ class Document
     oHash = @originalHash
     @signatures().forEach (signature) ->
       valid = false if valid && !signature.valid(oHash)
+    @transfers.forEach (transfer) ->
+      valid = transfer.validSignatures()
+    valid
+
+  holder: ->
+    @signatures().filter((sig) ->
+      sig.address
+    )[0]
+
+  address: ->
+    @holder().address
+
+  certNum: ->
+    @holder().certificate.getSerialNumber()
+
+  originalString: ->
+    secondArg = @lastOStringHash || @assetId
+    os = [
+      @originalHash,
+      secondArg,
+      @address(),
+      @certNum()
+    ].join('|')
+
+  originalStringHash: -> common.sha256(@originalString())
+
+  validAssetSignatures: ->
+    return false unless @originalHash
+    valid = true
+    oHash = @originalStringHash()
+    @signatures().forEach (signature) ->
+      valid = false if valid && !signature.validAssetSig(oHash)
+    @transfers.forEach (transfer) ->
+      valid = transfer.validAssetSignatures()
     valid
 
   signer_exist: (signer) ->
@@ -100,24 +147,32 @@ class Document
         s.signature == signer.signature
     selected.length > 0
 
-  this.fromXml = (xmlString, validate) ->
+  @fromXml = (xmlString, validate) ->
     throw new Error('xml is required') unless xmlString
-    xml = new XML
     new Promise (resolve, reject) ->
-      xml.parse(xmlString).then ->
-        opts =
-          signers: xml.xmlSigners()
-          version: xml.version
-          name: xml.name
-          contentType: xml.contentType
-          conservancyRecord: xml.getConservancyRecord()
-        doc = new Document(xml.file(), opts)
+      XML.parse(xmlString).then (xml) ->
         resolve({
-          document: doc
+          document: Document.fromXML(xml)
           # hash as attribute in the xml
           xmlOriginalHash: xml.originalHash
         })
       .catch (error) ->
         reject(error)
+
+  # From XMLFiesta::XML
+  @fromXML = (xml) ->
+    transfers = []
+    xml.xmlTransfers().forEach (xmlTransfer) ->
+      transfers.push(Document.fromXML(xmlTransfer))
+
+    opts =
+      signers: xml.xmlSigners()
+      version: xml.version
+      name: xml.name
+      contentType: xml.contentType
+      conservancyRecord: xml.getConservancyRecord()
+      transfers: transfers
+      assetId: xml.assetId
+    new Document(xml.file(), opts)
 
 module.exports = Document
