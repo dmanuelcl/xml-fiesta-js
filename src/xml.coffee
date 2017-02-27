@@ -76,6 +76,7 @@ class XML
     signers[0].signer.forEach (signer) ->
       attrs = signer.$
       parsedSigners.push({
+        taxId: attrs.id
         email: attrs.email
         cer: common.b64toHex(signer.certificate[0]._)
         signature: signer.signature && common.b64toHex(signer.signature[0]._)

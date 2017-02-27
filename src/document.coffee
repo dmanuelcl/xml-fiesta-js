@@ -147,6 +147,20 @@ class Document
         s.signature == signer.signature
     selected.length > 0
 
+  getTransfersDetails: ->
+    validity = @validAssetSignatures()
+    return false unless validity
+    transfersDetails = []
+    @transfers.forEach (transfer) ->
+      details =
+        fileHash: transfer.originalHash
+      transfer.signers.forEach (signer) ->
+        return false unless signer.address
+        details.taxId = signer.taxId
+        details.signature = common.hextoB64(signer.signature)
+      transfersDetails.push(details)
+    transfersDetails
+
   @fromXml = (xmlString, validate) ->
     throw new Error('xml is required') unless xmlString
     new Promise (resolve, reject) ->
